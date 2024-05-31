@@ -182,6 +182,55 @@ void simpleAlg4() {
 	std::cout << "* " << totalCount << std::endl;
 }
 
+int level[total_thread];
+int wating[total_thread];
+
+
+void myAlg()
+{
+	memset(level, -1, sizeof(level));
+	memset(wating, -1, sizeof(wating));
+	for (size_t i = 0; i < total_thread; i++) flag[i].store(false);
+	std::vector<std::thread> workers;
+	uint64_t start = get_sys_clock();
+	int totalCount = 0;
+	for (int i = 0; i < total_thread; i++) {
+		workers.emplace_back(std::thread([&](int tid) {
+			ping(tid);
+			size_t count = 0;
+			while (true) {
+				for (int lev = 0; lev < total_thread; lev++)
+				{
+					level[tid] = lev;
+					wating[lev] = tid;
+					while (wating[lev] == tid)
+					{
+						int j;
+						for (j = 0; j < total_thread; j++) {
+							if (level[j] >= lev && j != tid) break;
+							if (wating[lev] != tid) break;
+						}
+						if (j == total_thread) break;
+					}
+					usleep(0);
+				}
+				workround++;
+				level[tid] = -1;
+				if (++count % 100 == 0 && terminated.load()) break;
+			}
+			outlock.lock();
+			std::cout << tid << " " << count << std::endl;
+			totalCount += count;
+			outlock.unlock();
+			}, i));
+	}
+	while (get_sys_clock() - start < 3000000000) usleep(10000);
+	terminated.store(true);
+	for (int i = 0; i < total_thread; i++) workers[i].join();
+	std::cout << "* " << workround << std::endl;
+	std::cout << "* " << totalCount << std::endl;
+}
+
 static const uint64_t timetotal = 30000000000LLU;
 
 const int philo_count = 40;
@@ -374,7 +423,7 @@ int main(int argc, char** argv) {
 	if (argc != 2) {
 		std::cout << "com 0~3" << std::endl;
 	}
-	int n = 3;
+	int n = 6;
 	// n = std::atoi(argv[1]);
 	switch (n) {
 	case 0: {
@@ -399,6 +448,10 @@ int main(int argc, char** argv) {
 	}
 	case 5: {
 		prodConTest();
+		break;
+	}
+	case 6: {
+		myAlg();
 		break;
 	}
 	}
